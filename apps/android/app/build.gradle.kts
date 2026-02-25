@@ -137,6 +137,9 @@ dependencies {
   // Unicast DNS-SD (Wide-Area Bonjour) for tailnet discovery domains.
   implementation("dnsjava:dnsjava:3.6.4")
 
+  // On-device LLM inference via llama.cpp (ARM64 pre-built)
+  implementation("io.github.ljcamargo:llamacpp-kotlin:0.2.0")
+
   testImplementation("junit:junit:4.13.2")
   testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
   testImplementation("io.kotest:kotest-runner-junit5-jvm:6.0.7")

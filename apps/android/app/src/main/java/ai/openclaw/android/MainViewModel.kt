@@ -8,6 +8,8 @@ import ai.openclaw.android.node.CameraCaptureManager
 import ai.openclaw.android.node.CanvasController
 import ai.openclaw.android.node.ScreenRecordManager
 import ai.openclaw.android.node.SmsManager
+import ai.openclaw.android.chat.ChatMessage
+import ai.openclaw.android.chat.ChatPendingToolCall
 import kotlinx.coroutines.flow.StateFlow
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -66,6 +68,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
   val chatPendingToolCalls = runtime.chatPendingToolCalls
   val chatSessions = runtime.chatSessions
   val pendingRunCount: StateFlow<Int> = runtime.pendingRunCount
+
+  // ── Edge (on-device) mode ──
+  val edgeMode: StateFlow<Boolean> = runtime.edgeMode
+  val edgeChatMessages: StateFlow<List<ChatMessage>>
+    get() = runtime.edgeChatMessages
+  val edgeChatStreamingText: StateFlow<String?>
+    get() = runtime.edgeChatStreamingText
+  val edgeChatError: StateFlow<String?>
+    get() = runtime.edgeChatError
+  val edgeChatIsProcessing: StateFlow<Boolean>
+    get() = runtime.edgeChatIsProcessing
 
   fun setForeground(value: Boolean) {
     runtime.setForeground(value)
@@ -197,5 +210,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
   fun sendChat(message: String, thinking: String, attachments: List<OutgoingAttachment>) {
     runtime.sendChat(message = message, thinking = thinking, attachments = attachments)
+  }
+
+  fun setEdgeMode(enabled: Boolean) {
+    runtime.setEdgeMode(enabled)
+  }
+
+  fun sendEdgeChat(message: String) {
+    runtime.sendEdgeChat(message)
+  }
+
+  fun clearEdgeHistory() {
+    runtime.clearEdgeHistory()
+  }
+
+  val edgeModelReady: StateFlow<Boolean> = runtime.edgeModelReady
+
+  fun loadEdgeModel(modelPath: String, contextLength: Int = 2048) {
+    runtime.loadEdgeModel(modelPath, contextLength)
+  }
+
+  fun unloadEdgeModel() {
+    runtime.unloadEdgeModel()
   }
 }

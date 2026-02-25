@@ -18,6 +18,9 @@ import ai.openclaw.android.gateway.GatewayEndpoint
 import ai.openclaw.android.gateway.GatewaySession
 import ai.openclaw.android.gateway.probeGatewayTlsFingerprint
 import ai.openclaw.android.node.*
+import ai.openclaw.android.tools.edge.EdgeChatController
+import ai.openclaw.android.tools.edge.EdgeToolModule
+import ai.openclaw.android.tools.edge.LlamaCppEngine
 import ai.openclaw.android.protocol.OpenClawCanvasA2UIAction
 import ai.openclaw.android.voice.TalkModeManager
 import ai.openclaw.android.voice.VoiceWakeManager
@@ -365,6 +368,41 @@ class NodeRuntime(context: Context) {
   val chatPendingToolCalls: StateFlow<List<ChatPendingToolCall>> = chat.pendingToolCalls
   val chatSessions: StateFlow<List<ChatSessionEntry>> = chat.sessions
   val pendingRunCount: StateFlow<Int> = chat.pendingRunCount
+
+  // ── Edge (on-device) mode ──────────────────────────────────────────
+  private val _edgeMode = MutableStateFlow(false)
+  val edgeMode: StateFlow<Boolean> = _edgeMode.asStateFlow()
+
+  val edgeModule: EdgeToolModule by lazy {
+    EdgeToolModule(
+      camera = camera,
+      location = location,
+      smsManager = sms,
+      screenRecorder = screenRecorder,
+      cameraEnabledFlow = cameraEnabled,
+      locationModeFlow = locationMode,
+      locationPreciseEnabledFlow = locationPreciseEnabled,
+      screenRecordActiveFlow = _screenRecordActive,
+    )
+  }
+
+  val edgeChatController: EdgeChatController by lazy {
+    EdgeChatController(scope = scope, edgeChat = edgeModule.edgeChat)
+  }
+
+  val edgeChatMessages: StateFlow<List<ChatMessage>>
+    get() = edgeChatController.messages
+  val edgeChatStreamingText: StateFlow<String?>
+    get() = edgeChatController.streamingAssistantText
+  val edgeChatError: StateFlow<String?>
+    get() = edgeChatController.errorText
+  val edgeChatIsProcessing: StateFlow<Boolean>
+    get() = edgeChatController.isProcessing
+
+  private val _edgeModelReady = MutableStateFlow(false)
+  val edgeModelReady: StateFlow<Boolean> = _edgeModelReady.asStateFlow()
+
+  private var llamaCppEngine: LlamaCppEngine? = null
 
   init {
     gatewayEventHandler = GatewayEventHandler(
@@ -714,7 +752,49 @@ class NodeRuntime(context: Context) {
   }
 
   fun sendChat(message: String, thinking: String, attachments: List<OutgoingAttachment>) {
-    chat.sendMessage(message = message, thinkingLevel = thinking, attachments = attachments)
+    if (_edgeMode.value) {
+      edgeChatController.sendMessage(message)
+    } else {
+      chat.sendMessage(message = message, thinkingLevel = thinking, attachments = attachments)
+    }
+  }
+
+  fun setEdgeMode(enabled: Boolean) {
+    _edgeMode.value = enabled
+  }
+
+  fun sendEdgeChat(message: String) {
+    edgeChatController.sendMessage(message)
+  }
+
+  fun clearEdgeHistory() {
+    edgeChatController.clearHistory()
+  }
+
+  /**
+   * Load a GGUF model file and switch to the real llama.cpp inference engine.
+   *
+   * @param modelPath Absolute path to the .gguf file on device storage
+   * @param contextLength Max context window (tokens). Defaults to 2048.
+   */
+  fun loadEdgeModel(modelPath: String, contextLength: Int = 2048) {
+    val engine = LlamaCppEngine(appContext.contentResolver)
+    engine.loadModel(modelPath, contextLength)
+    llamaCppEngine = engine
+
+    val newChat = edgeModule.replaceEngine(engine)
+    // Rewire the chat controller with the new engine-backed EdgeModelChat
+    edgeChatController.updateEdgeChat(newChat)
+    _edgeModelReady.value = true
+  }
+
+  /**
+   * Unload the current GGUF model and revert to the stub engine.
+   */
+  fun unloadEdgeModel() {
+    llamaCppEngine?.unload()
+    llamaCppEngine = null
+    _edgeModelReady.value = false
   }
 
   private fun handleGatewayEvent(event: String, payloadJson: String?) {

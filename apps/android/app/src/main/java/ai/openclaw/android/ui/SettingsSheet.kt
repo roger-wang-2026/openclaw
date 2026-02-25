@@ -622,6 +622,76 @@ fun SettingsSheet(viewModel: MainViewModel) {
       )
     }
 
+      item { HorizontalDivider(color = mobileBorder) }
+
+    // Edge AI (on-device inference)
+      item {
+        Text(
+          "EDGE AI",
+          style = mobileCaption1.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
+          color = mobileAccent,
+        )
+      }
+    item {
+      val edgeModeOn by viewModel.edgeMode.collectAsState()
+      ListItem(
+        modifier = settingsRowModifier(),
+        colors = listItemColors,
+        headlineContent = { Text("Edge Mode", style = mobileHeadline) },
+        supportingContent = { Text("Route chat to the on-device LLM instead of the remote gateway.", style = mobileCallout) },
+        trailingContent = { Switch(checked = edgeModeOn, onCheckedChange = viewModel::setEdgeMode) },
+      )
+    }
+    item {
+      val modelReady by viewModel.edgeModelReady.collectAsState()
+      val isProcessing by viewModel.edgeChatIsProcessing.collectAsState()
+      var modelPath by remember { mutableStateOf("/sdcard/Download/model.gguf") }
+
+      Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+          value = modelPath,
+          onValueChange = { modelPath = it },
+          label = { Text("GGUF Model Path", style = mobileCaption1, color = mobileTextSecondary) },
+          modifier = Modifier.fillMaxWidth(),
+          textStyle = mobileBody.copy(color = mobileText),
+          colors = settingsTextFieldColors(),
+          singleLine = true,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          Button(
+            onClick = { viewModel.loadEdgeModel(modelPath.trim()) },
+            enabled = modelPath.trim().isNotEmpty() && !modelReady,
+            colors = settingsPrimaryButtonColors(),
+          ) {
+            Text("Load Model")
+          }
+          Button(
+            onClick = { viewModel.unloadEdgeModel() },
+            enabled = modelReady && !isProcessing,
+            colors = settingsDangerButtonColors(),
+          ) {
+            Text("Unload")
+          }
+          Button(
+            onClick = { viewModel.clearEdgeHistory() },
+            enabled = !isProcessing,
+            colors = settingsPrimaryButtonColors(),
+          ) {
+            Text("Clear Chat")
+          }
+        }
+        Text(
+          when {
+            isProcessing -> "⏳ Inference running…"
+            modelReady -> "✅ Model loaded and ready"
+            else -> "No model loaded"
+          },
+          style = mobileCallout,
+          color = mobileTextSecondary,
+        )
+      }
+    }
+
       item { Spacer(modifier = Modifier.height(24.dp)) }
     }
   }
